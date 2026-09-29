@@ -16,8 +16,10 @@ class App {
   static bool handleVolumeCommand(uint8_t volume, void* context);
   void processBluetoothChanges();
   void processStatusRequests();
+  void logDiagnostics(const char* event);
 
   I2sOutput i2sOutput_;
   BluetoothService bluetoothService_;
   UartProtocol uartProtocol_;
+  uint32_t lastDiagnosticsMs_ = 0;
 };

@@ -1,13 +1,45 @@
 #include "bluetooth/BluetoothService.h"
 
+#include <esp_mac.h>
+#include <stdio.h>
 #include <string.h>
 
-#include "AppConfig.h"
 #include "diagnostics/Logger.h"
 
 BluetoothService* BluetoothService::instance_ = nullptr;
 
 namespace {
+
+void recordCallback(CallbackDiagnostics& diagnostics, bool audioStream = false) {
+  const uint32_t count =
+      __atomic_add_fetch(&diagnostics.count, 1U, __ATOMIC_RELAXED);
+  if (audioStream && count != 1U && count % 5000U != 0U) {
+    return;
+  }
+
+  __atomic_store_n(&diagnostics.taskId,
+                   reinterpret_cast<uintptr_t>(xTaskGetCurrentTaskHandle()),
+                   __ATOMIC_RELAXED);
+  __atomic_store_n(&diagnostics.core, static_cast<uint32_t>(xPortGetCoreID()),
+                   __ATOMIC_RELAXED);
+  const uint32_t remaining = uxTaskGetStackHighWaterMark(nullptr);
+  uint32_t minimum =
+      __atomic_load_n(&diagnostics.stackHighWaterBytes, __ATOMIC_RELAXED);
+  while (remaining < minimum &&
+         !__atomic_compare_exchange_n(&diagnostics.stackHighWaterBytes,
+                                      &minimum, remaining, false,
+                                      __ATOMIC_RELAXED, __ATOMIC_RELAXED)) {
+  }
+}
+
+void copyCallbackDiagnostics(CallbackDiagnostics& destination,
+                             const CallbackDiagnostics& source) {
+  destination.count = __atomic_load_n(&source.count, __ATOMIC_RELAXED);
+  destination.taskId = __atomic_load_n(&source.taskId, __ATOMIC_RELAXED);
+  destination.core = __atomic_load_n(&source.core, __ATOMIC_RELAXED);
+  destination.stackHighWaterBytes =
+      __atomic_load_n(&source.stackHighWaterBytes, __ATOMIC_RELAXED);
+}
 
 void copyMetadata(char* destination, const uint8_t* source) {
   if (source == nullptr) {
@@ -82,6 +114,11 @@ BluetoothService::BluetoothService(I2sOutput& audioOutput)
 }
 
 void BluetoothService::begin() {
+  if (!prepareAutoName()) {
+    Logger::error("Bluetooth MAC read failed");
+    return;
+  }
+
   a2dpSink_.setPeerNameCallback(peerNameCallback);
   a2dpSink_.set_on_connection_state_changed(connectionCallback, this);
   a2dpSink_.set_avrc_rn_playstatus_callback(playbackCallback);
@@ -95,10 +132,24 @@ void BluetoothService::begin() {
   // Application-owned I2S is the only physical output. The false argument
   // prevents ESP32-A2DP from also writing through its legacy I2S backend.
   a2dpSink_.set_stream_reader(streamAudio, false);
-  a2dpSink_.start(AppConfig::BLUETOOTH_NAME, false);
+  a2dpSink_.start(deviceName_, false);
 
   Logger::info("Bluetooth initialized");
-  Logger::info("A2DP Sink started as", AppConfig::BLUETOOTH_NAME);
+  Logger::info("A2DP Sink started as", deviceName_);
+}
+
+bool BluetoothService::prepareAutoName() {
+  uint8_t btMac[6];
+  if (esp_read_mac(btMac, ESP_MAC_BT) != ESP_OK) {
+    return false;
+  }
+
+  snprintf(deviceName_, sizeof(deviceName_), "%s%02X%02X%02X",
+           AppConfig::BLUETOOTH_NAME_PREFIX,
+           static_cast<unsigned int>(btMac[3]),
+           static_cast<unsigned int>(btMac[4]),
+           static_cast<unsigned int>(btMac[5]));
+  return true;
 }
 
 bool BluetoothService::sendAvrcCommand(AvrcCommand command) {
@@ -199,16 +250,28 @@ void BluetoothService::getSnapshot(BluetoothSnapshot& snapshot) const {
   portEXIT_CRITICAL(&stateMux_);
 }
 
+void BluetoothService::getDiagnostics(BluetoothDiagnostics& diagnostics) const {
+  copyCallbackDiagnostics(diagnostics.connection, diagnostics_.connection);
+  copyCallbackDiagnostics(diagnostics.peerName, diagnostics_.peerName);
+  copyCallbackDiagnostics(diagnostics.metadata, diagnostics_.metadata);
+  copyCallbackDiagnostics(diagnostics.volume, diagnostics_.volume);
+  copyCallbackDiagnostics(diagnostics.playback, diagnostics_.playback);
+  copyCallbackDiagnostics(diagnostics.sampleRate, diagnostics_.sampleRate);
+  copyCallbackDiagnostics(diagnostics.stream, diagnostics_.stream);
+}
+
 void BluetoothService::connectionCallback(esp_a2d_connection_state_t state,
                                           void* context) {
   BluetoothService* service = static_cast<BluetoothService*>(context);
   if (service != nullptr) {
+    recordCallback(service->diagnostics_.connection);
     service->updateConnection(state);
   }
 }
 
 void BluetoothService::playbackCallback(esp_avrc_playback_stat_t state) {
   if (instance_ != nullptr) {
+    recordCallback(instance_->diagnostics_.playback);
     instance_->updatePlayback(state);
   }
 }
@@ -216,30 +279,35 @@ void BluetoothService::playbackCallback(esp_avrc_playback_stat_t state) {
 void BluetoothService::metadataCallback(uint8_t attributeId,
                                         const uint8_t* text) {
   if (instance_ != nullptr && text != nullptr) {
+    recordCallback(instance_->diagnostics_.metadata);
     instance_->updateMetadata(attributeId, text);
   }
 }
 
 void BluetoothService::volumeCallback(int volume) {
   if (instance_ != nullptr) {
+    recordCallback(instance_->diagnostics_.volume);
     instance_->updateVolume(volume);
   }
 }
 
 void BluetoothService::sampleRateCallback(uint16_t sampleRate) {
   if (instance_ != nullptr) {
+    recordCallback(instance_->diagnostics_.sampleRate);
     instance_->updateSampleRate(sampleRate);
   }
 }
 
 void BluetoothService::peerNameCallback(const char* name) {
   if (instance_ != nullptr) {
+    recordCallback(instance_->diagnostics_.peerName);
     instance_->updatePeerName(name);
   }
 }
 
 void BluetoothService::streamAudio(const uint8_t* data, uint32_t length) {
   if (instance_ != nullptr) {
+    recordCallback(instance_->diagnostics_.stream, true);
     instance_->audioOutput_.write(data, length);
   }
 }
@@ -297,7 +365,7 @@ void BluetoothService::updatePlayback(esp_avrc_playback_stat_t state) {
 
 void BluetoothService::updateMetadata(uint8_t attributeId,
                                       const uint8_t* text) {
-  char value[BT_METADATA_MAX_LENGTH + 1];
+  char value[BT_METADATA_MAX_LENGTH + 1]{};
   copyMetadata(value, text);
 
   char* destination = nullptr;
@@ -361,7 +429,7 @@ void BluetoothService::updatePeerName(const char* name) {
     return;
   }
 
-  char value[BT_PEER_NAME_MAX_LENGTH + 1];
+  char value[BT_PEER_NAME_MAX_LENGTH + 1]{};
   copyPeerName(value, name);
   if (value[0] == '\0') {
     return;

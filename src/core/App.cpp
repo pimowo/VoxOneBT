@@ -5,6 +5,22 @@
 #include "Version.h"
 #include "diagnostics/Logger.h"
 
+namespace {
+
+void logCallbackDiagnostics(const char* name,
+                            const CallbackDiagnostics& diagnostics) {
+  if (diagnostics.count == 0) {
+    return;
+  }
+  Serial.printf("[DIAG] %s count=%lu task=%p core=%lu stackHwm=%lu B\n",
+                name, static_cast<unsigned long>(diagnostics.count),
+                reinterpret_cast<void*>(diagnostics.taskId),
+                static_cast<unsigned long>(diagnostics.core),
+                static_cast<unsigned long>(diagnostics.stackHighWaterBytes));
+}
+
+}  // namespace
+
 App::App() : i2sOutput_(), bluetoothService_(i2sOutput_), uartProtocol_(Serial2) {}
 
 void App::begin() {
@@ -14,7 +30,9 @@ void App::begin() {
   uartProtocol_.setVolumeCommandHandler(handleVolumeCommand, this);
   uartProtocol_.begin();
   Logger::info("UART READY");
+  i2sOutput_.begin();
   bluetoothService_.begin();
+  logDiagnostics("boot");
 }
 
 bool App::handleAvrcCommand(AvrcCommand command, void* context) {
@@ -32,6 +50,27 @@ void App::loop() {
   processBluetoothChanges();
   processStatusRequests();
   i2sOutput_.loop();
+  const uint32_t now = millis();
+  if (now - lastDiagnosticsMs_ >= 30000U) {
+    lastDiagnosticsMs_ = now;
+    logDiagnostics("periodic");
+  }
+}
+
+void App::logDiagnostics(const char* event) {
+  Serial.printf("[DIAG] %s heap=%lu minHeap=%lu appStackHwm=%lu B\n",
+                event, static_cast<unsigned long>(ESP.getFreeHeap()),
+                static_cast<unsigned long>(ESP.getMinFreeHeap()),
+                static_cast<unsigned long>(uxTaskGetStackHighWaterMark(nullptr)));
+  BluetoothDiagnostics diagnostics{};
+  bluetoothService_.getDiagnostics(diagnostics);
+  logCallbackDiagnostics("connection", diagnostics.connection);
+  logCallbackDiagnostics("peerName", diagnostics.peerName);
+  logCallbackDiagnostics("metadata", diagnostics.metadata);
+  logCallbackDiagnostics("volume", diagnostics.volume);
+  logCallbackDiagnostics("playback", diagnostics.playback);
+  logCallbackDiagnostics("sampleRate", diagnostics.sampleRate);
+  logCallbackDiagnostics("stream", diagnostics.stream);
 }
 
 void App::processBluetoothChanges() {
@@ -94,6 +133,12 @@ void App::processBluetoothChanges() {
   }
 
   uartProtocol_.sendBluetoothChanges(changes);
+  if (changes.connectionChanged) {
+    logDiagnostics(changes.connection == BtConnectionState::Connected
+                       ? "connected" : "disconnected");
+  } else if (changes.sampleRateChanged) {
+    logDiagnostics("sampleRate");
+  }
 }
 
 void App::processStatusRequests() {

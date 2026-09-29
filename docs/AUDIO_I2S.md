@@ -3,12 +3,15 @@
 The audio link is one-way. VoxOneBT is the I2S master transmitter and VoxOne
 MAIN is the I2S slave receiver.
 
-| Signal | VoxOneBT | Direction | VoxOne MAIN |
-|---|---|---:|---|
-| BCLK | GPIO26 | -> | GPIO21 |
-| WS / LRCLK | GPIO25 | -> | GPIO22 |
-| DATA | GPIO27 | -> | GPIO34 |
-| GND | GND | <-> | GND |
+| Signal | VoxOneBT | Direction |
+|---|---|---:|
+| BCLK | GPIO4 | -> |
+| WS / LRCLK | GPIO25 | -> |
+| DATA | GPIO27 | -> |
+| GND | GND | <-> |
+
+Receiver pins depend on the SALON or DIN installation. See `HARDWARE.md` for
+both wiring maps. A common ground is required.
 
 The wire format is Philips I2S, MSB first, signed 16-bit stereo PCM with
 interleaved left/right frames. VoxOneBT forwards the native A2DP rate (normally

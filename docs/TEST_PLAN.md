@@ -18,8 +18,19 @@
 2. Flash the VoxOneBT board only after identifying its correct serial port.
 3. Open its USB Serial monitor at 115200 baud.
 4. Confirm the diagnostic boot output includes version `0.6.1-dev`, `BOOT`,
-   `UART READY`, `Bluetooth initialized`, and `A2DP Sink started as VoxOneBT`.
+   `UART READY`, `Bluetooth initialized`, and
+   `A2DP Sink started as VoxOneBT-XXXXXX`.
    `I2S initialized` must appear only after a valid stream rate is negotiated.
+
+## Bluetooth name
+
+1. Read this module's Bluetooth MAC and note its last three bytes. Use the BT
+   MAC, not a Wi-Fi MAC or a MAIN board address.
+2. Confirm the advertised and logged name matches `VoxOneBT-[0-9A-F]{6}`.
+3. Confirm the six suffix characters equal those three BT MAC bytes in order,
+   uppercase and without separators. For example, BT MAC
+   `AA:BB:CC:A1:B2:C3` gives `VoxOneBT-A1B2C3`.
+4. Reboot and confirm the name is unchanged.
 
 ## Inter-board UART
 
@@ -105,17 +116,19 @@ Confirm that no default 44100 or zero value is reported before negotiation.
 
 Also verify UTF-8 names remain valid and CR/LF bytes are replaced with spaces.
 
-## Completed Bluetooth hardware checks
+## Bluetooth hardware checks
 
-1. Pair a phone with `VoxOneBT` and expect `CONNECTED` once.
+1. Pair a phone with the `VoxOneBT-XXXXXX` name verified above and expect
+   `CONNECTED` once.
 2. Start media and verify artist, title, album, and playback events.
 3. Repeat identical metadata and confirm it is not resent.
 4. Pause, resume, and stop, checking `PAUSED`, `PLAYING`, and `STOPPED`.
 5. Run `GET_STATUS` while connected and compare the complete snapshot.
 6. Disconnect and expect only `DISCONNECTED`; then verify `GET_STATUS` returns
    `DISCONNECTED` and `STOPPED` without old metadata.
-7. With both boards powered off, connect BCLK26 -> MAIN GPIO21, WS25 -> MAIN
-   GPIO22, DATA27 -> MAIN GPIO34, and common GND.
+7. With both boards powered off, connect VoxOneBT BCLK GPIO4, WS GPIO25,
+   DATA GPIO27, and UART TX17/RX16 to the SALON or DIN pins in `HARDWARE.md`.
+   Connect a common GND.
 8. On playback, verify with a logic analyzer that VoxOneBT is master, BCLK and
    WS use Philips timing, and WS rate equals the negotiated `SAMPLE_RATE`.
 9. Check 16-bit signed interleaved L/R audio at 16/32/44.1/48 kHz where the
@@ -123,6 +136,33 @@ Also verify UTF-8 names remain valid and CR/LF bytes are replaced with spaces.
 10. Pause, stop, and disconnect; verify I2S stops and no stale audio tail is
     emitted after resuming.
 
-The checks above were completed successfully on a Wemos D1 R32, including
+Earlier Bluetooth and I2S checks passed on a Wemos D1 R32, including
 reconnect, UTF-8 metadata, I2S audio, and peer-name reporting (`Redmi Note 14`).
-No crash or reset occurred during the test session.
+The GPIO4 BCLK and generated-name checks above require a new hardware run.
+
+## Crash investigation retest
+
+The diagnostic firmware prints `[DIAG]` on boot, on connection/disconnection or
+sample-rate changes, and every 30 seconds. Each report includes current/minimum
+free heap and the minimum free stack of the Arduino loop task in bytes. Callback
+lines contain cumulative counts, task handle, core, and minimum free stack for
+connection, peer name, metadata, volume, playback, sample rate, and PCM stream.
+The PCM path only increments a counter; it samples task/core/stack on its first
+callback and every 5000 callbacks. No PCM packet is printed from that callback.
+
+1. With MAIN's UART runtime still inactive, record the USB Serial boot log and
+   verify the advertised name is `VoxOneBT-EFF35A` for the current module.
+2. Run the same phone and audio source as in the failing session for at least
+   30 minutes. Capture the complete serial log, including each `[DIAG]` line,
+   panic registers, and backtrace if a reset occurs.
+3. During playback, repeat metadata changes, play/pause, volume changes, and
+   reconnects. Compare heap, minimum heap, and stack high-water marks before
+   and after each event. Check that `stream` counts rise without per-packet logs.
+4. Repeat once with the SALON UART TX wire disconnected from VoxOneBT RX16, or
+   hold RX16 at 3.3 V through a suitable pull-up while no transmitter drives it.
+   Compare the rate of `UART line exceeded 64 characters` warnings. Restore
+   the intended wiring afterward. Do not connect RX16 directly to 3.3 V if a
+   transmitter may drive the line low.
+5. If a panic repeats, preserve the exact ELF from the same build and decode
+   its PC/backtrace addresses. Compare the last diagnostic counters and memory
+   minima; do not infer the cause from the last volume log alone.

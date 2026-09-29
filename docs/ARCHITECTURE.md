@@ -4,7 +4,8 @@ VoxOneBT is a separate classic ESP32 running separate firmware. It does not
 share a project or firmware image with VoxOne MAIN.
 
 The MAIN-to-BT control path is a cross-connected hardware UART. VoxOneBT also
-runs a Bluetooth Classic A2DP Sink named `VoxOneBT`. AVRCP supplies playback
+runs a Bluetooth Classic A2DP Sink named `VoxOneBT-XXXXXX`, where the suffix
+comes from the last three bytes of its Bluetooth MAC. AVRCP supplies playback
 status and metadata. A one-way I2S path sends decoded PCM to MAIN.
 
 The firmware is deliberately small:

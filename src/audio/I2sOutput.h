@@ -5,6 +5,7 @@
 
 class I2sOutput {
  public:
+  bool begin();
   bool setSampleRate(uint32_t sampleRate);
   void setActive(bool active);
   void write(const uint8_t* data, size_t length);
@@ -24,6 +25,6 @@ class I2sOutput {
   bool installed_ = false;
   bool active_ = false;
   uint32_t sampleRate_ = 0;
-  volatile bool writeErrorPending_ = false;
-  volatile bool writeErrorLatched_ = false;
+  bool writeErrorPending_ = false;
+  bool writeErrorLatched_ = false;
 };

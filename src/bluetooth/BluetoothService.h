@@ -4,6 +4,7 @@
 #include <stddef.h>
 #include <stdint.h>
 
+#include "AppConfig.h"
 #include "audio/I2sOutput.h"
 
 constexpr size_t BT_METADATA_MAX_LENGTH = 192;
@@ -54,6 +55,23 @@ struct BluetoothChanges : BluetoothSnapshot {
   uint8_t unsupportedPlaybackValue = 0;
 };
 
+struct CallbackDiagnostics {
+  uint32_t count = 0;
+  uintptr_t taskId = 0;
+  uint32_t core = UINT32_MAX;
+  uint32_t stackHighWaterBytes = UINT32_MAX;
+};
+
+struct BluetoothDiagnostics {
+  CallbackDiagnostics connection;
+  CallbackDiagnostics peerName;
+  CallbackDiagnostics metadata;
+  CallbackDiagnostics volume;
+  CallbackDiagnostics playback;
+  CallbackDiagnostics sampleRate;
+  CallbackDiagnostics stream;
+};
+
 class BluetoothService {
  public:
   explicit BluetoothService(I2sOutput& audioOutput);
@@ -63,6 +81,7 @@ class BluetoothService {
   bool setVolume(uint8_t volume);
   bool takeChanges(BluetoothChanges& changes);
   void getSnapshot(BluetoothSnapshot& snapshot) const;
+  void getDiagnostics(BluetoothDiagnostics& diagnostics) const;
 
  private:
   class PeerNameSink final : public BluetoothA2DPSink {
@@ -120,14 +139,17 @@ class BluetoothService {
   void updateSampleRate(uint16_t sampleRate);
   void updatePeerName(const char* name);
   void clearSessionStateLocked();
+  bool prepareAutoName();
 
   static BluetoothService* instance_;
 
   DiscardOutput discardOutput_;
   PeerNameSink a2dpSink_;
+  char deviceName_[AppConfig::BLUETOOTH_AUTO_NAME_SIZE]{};
   I2sOutput& audioOutput_;
   mutable portMUX_TYPE stateMux_ = portMUX_INITIALIZER_UNLOCKED;
   BluetoothSnapshot state_{};
   uint16_t pendingFlags_ = 0;
   uint8_t unsupportedPlaybackValue_ = 0;
+  BluetoothDiagnostics diagnostics_{};
 };

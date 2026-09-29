@@ -5,6 +5,15 @@
 #include "Pins.h"
 #include "diagnostics/Logger.h"
 
+bool I2sOutput::begin() {
+  mutex_ = xSemaphoreCreateMutex();
+  if (mutex_ == nullptr) {
+    Logger::error("I2S mutex allocation failed");
+    return false;
+  }
+  return true;
+}
+
 bool I2sOutput::install(uint32_t sampleRate) {
   i2s_config_t config{};
   config.mode = static_cast<i2s_mode_t>(I2S_MODE_MASTER | I2S_MODE_TX);
@@ -52,11 +61,7 @@ bool I2sOutput::setSampleRate(uint32_t sampleRate) {
     return false;
   }
   if (mutex_ == nullptr) {
-    mutex_ = xSemaphoreCreateMutex();
-    if (mutex_ == nullptr) {
-      Logger::error("I2S mutex allocation failed");
-      return false;
-    }
+    return false;
   }
 
   xSemaphoreTake(mutex_, portMAX_DELAY);
@@ -146,15 +151,15 @@ void I2sOutput::write(const uint8_t* data, size_t length) {
 }
 
 void I2sOutput::flagWriteError() {
-  if (!writeErrorLatched_) {
-    writeErrorLatched_ = true;
-    writeErrorPending_ = true;
+  bool expected = false;
+  if (__atomic_compare_exchange_n(&writeErrorLatched_, &expected, true, false,
+                                  __ATOMIC_RELAXED, __ATOMIC_RELAXED)) {
+    __atomic_store_n(&writeErrorPending_, true, __ATOMIC_RELEASE);
   }
 }
 
 void I2sOutput::loop() {
-  if (writeErrorPending_) {
-    writeErrorPending_ = false;
+  if (__atomic_exchange_n(&writeErrorPending_, false, __ATOMIC_ACQUIRE)) {
     Logger::error("I2S PCM write failed or timed out");
   }
 }
