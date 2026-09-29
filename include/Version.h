@@ -5,6 +5,6 @@
 namespace Version {
 
 constexpr char FIRMWARE[] = "0.6.1-dev";
-constexpr uint8_t PROTOCOL = 1;
+constexpr uint8_t PROTOCOL = 2;
 
 }  // namespace Version

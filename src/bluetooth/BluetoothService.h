@@ -77,6 +77,7 @@ class BluetoothService {
   explicit BluetoothService(I2sOutput& audioOutput);
 
   void begin();
+  const char* name() const { return deviceName_; }
   bool sendAvrcCommand(AvrcCommand command);
   bool setVolume(uint8_t volume);
   bool takeChanges(BluetoothChanges& changes);

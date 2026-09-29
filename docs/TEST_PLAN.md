@@ -1,4 +1,4 @@
-# Stage 6 test plan
+# UART Protocol v2 test plan
 
 ## Current no-hardware verification
 
@@ -11,6 +11,10 @@
    physical output while application `I2sOutput` exclusively owns I2S0.
 6. Verify no default sample rate, resampler, application audio task, or extra
    PCM ring buffer is present.
+7. Run the native UART protocol test with `g++ -std=c++11 -Wall -Wextra
+   -Itests/native/stubs -Iinclude -Isrc tests/native/UartProtocolTest.cpp
+   src/protocol/UartProtocol.cpp -o .pio/build/uart_protocol_native.exe`, then
+   run `.pio/build/uart_protocol_native.exe`.
 
 ## Build and boot
 
@@ -36,15 +40,18 @@
 
 With power off, connect UART as documented. I2S may remain disconnected for
 UART-only tests. Power the boards and confirm that MAIN sees `READY` and
-`PROTO 1`.
+`PROTO 2`, followed by `FW_VERSION`, `BT_NAME`, and
+`CAPS A2DP AVRCP ABSVOL I2S_TX DIAG`.
 
 Send each test as a line ending in LF unless otherwise noted:
 
 | Input | Expected UART response |
 |---|---|
-| `GET_STATUS` | `PROTO 1`, then `READY` |
+| `GET_STATUS` | `STATUS_BEGIN`, identity fields, state, `STATUS_END` |
 | empty line | no response |
-| `GET_STATUS\r\n` | `PROTO 1`, then `READY` |
+| `GET_STATUS\r\n` | same framed status response |
+| `PING` | `PONG` |
+| `GET_DIAG` | `DIAG_BEGIN`, reset reason, uptime, heap, minimum heap, `DIAG_END` |
 | `PLAY` while disconnected | `ERR NOT_CONNECTED` |
 | `SOMETHING_ELSE` | `ERR UNKNOWN_COMMAND` |
 | more than 64 characters, then LF | `ERR LINE_TOO_LONG` once |
@@ -52,6 +59,12 @@ Send each test as a line ending in LF unless otherwise noted:
 
 Finally, send several commands back-to-back, each terminated with LF, and
 verify one complete response per non-empty command without resets or stalls.
+Check that every `GET_STATUS` contains `PROTO 2`, `FW_VERSION 0.6.1-dev`, the
+same `BT_NAME` used by A2DP, and the capability line. Check the status fields
+appear between `STATUS_BEGIN` and `STATUS_END` in documented order. Check that
+`GET_DIAG` uses a short reset token and that repeated `PING` requests have no
+effect on Bluetooth state. The 64-byte limit applies to incoming commands;
+longer outgoing metadata is allowed.
 
 ## Logical command paths
 
@@ -126,8 +139,8 @@ Also verify UTF-8 names remain valid and CR/LF bytes are replaced with spaces.
 5. Run `GET_STATUS` while connected and compare the complete snapshot.
 6. Disconnect and expect only `DISCONNECTED`; then verify `GET_STATUS` returns
    `DISCONNECTED` and `STOPPED` without old metadata.
-7. With both boards powered off, connect VoxOneBT BCLK GPIO4, WS GPIO25,
-   DATA GPIO27, and UART TX17/RX16 to the SALON or DIN pins in `HARDWARE.md`.
+7. With both boards powered off, connect VoxOneBT BCLK GPIO18, WS GPIO19,
+   DATA GPIO23, and UART TX17/RX16 to the SALON or DIN pins in `HARDWARE.md`.
    Connect a common GND.
 8. On playback, verify with a logic analyzer that VoxOneBT is master, BCLK and
    WS use Philips timing, and WS rate equals the negotiated `SAMPLE_RATE`.
@@ -136,9 +149,11 @@ Also verify UTF-8 names remain valid and CR/LF bytes are replaced with spaces.
 10. Pause, stop, and disconnect; verify I2S stops and no stale audio tail is
     emitted after resuming.
 
-Earlier Bluetooth and I2S checks passed on a Wemos D1 R32, including
-reconnect, UTF-8 metadata, I2S audio, and peer-name reporting (`Redmi Note 14`).
-The GPIO4 BCLK and generated-name checks above require a new hardware run.
+Bluetooth and generated-name checks passed on a Wemos D1 mini
+ESP32 classic in the hardware checkpoint, including repeated reconnects and
+the name `VoxOneBT-EFF35A`. Protocol v2 UART responses require a new hardware
+run after this firmware is flashed. Physical verification of the I2S
+GPIO18/19/23 mapping is **PENDING**.
 
 ## Crash investigation retest
 

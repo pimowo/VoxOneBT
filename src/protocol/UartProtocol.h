@@ -13,7 +13,7 @@ class UartProtocol {
 
   explicit UartProtocol(HardwareSerial& serial);
 
-  void begin();
+  void begin(const char* bluetoothName);
   void loop();
   void setAvrcCommandHandler(AvrcCommandHandler handler, void* context);
   void setVolumeCommandHandler(VolumeCommandHandler handler, void* context);
@@ -25,6 +25,8 @@ class UartProtocol {
   void consume(char character);
   void handleLine();
   void sendLine(const char* line);
+  void sendIdentity();
+  void sendDiagnostics();
   void sendConnection(BtConnectionState state);
   void sendDevice(const char* name);
   void sendPlayback(BtPlaybackState state);
@@ -36,6 +38,7 @@ class UartProtocol {
   bool parseVolume(const char* text, uint8_t& volume) const;
 
   HardwareSerial& serial_;
+  const char* bluetoothName_ = nullptr;
   char lineBuffer_[AppConfig::UART_MAX_LINE_LENGTH + 1]{};
   size_t lineLength_ = 0;
   bool discardingOverflow_ = false;

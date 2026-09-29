@@ -1,32 +1,67 @@
-# UART Protocol v1
+# UART Protocol v2
 
 Transport settings are 115200 baud, 8 data bits, no parity, and 1 stop bit.
-Messages are ASCII text lines terminated by LF (`\n`). CR characters are
+Messages are text lines terminated by LF (`\n`). Keywords and numeric fields
+are ASCII; peer names and metadata may contain UTF-8. CR characters are
 ignored, so both LF and CRLF input work.
 
 At boot VoxOneBT sends:
 
 ```text
 READY
-PROTO 1
+PROTO 2
+FW_VERSION 0.6.1-dev
+BT_NAME VoxOneBT-EFF35A
+CAPS A2DP AVRCP ABSVOL I2S_TX DIAG
 ```
 
-## Implemented command
+`BT_NAME` is the actual name owned by BluetoothService; the suffix shown above
+is an example. `CAPS` is a space-separated list of supported features. Later
+capabilities may be appended without changing the line format.
 
-`GET_STATUS` returns a current Bluetooth snapshot. When disconnected:
+## GET_STATUS
+
+`GET_STATUS` returns one Bluetooth snapshot copied under the existing state
+lock before any status line is sent. When disconnected:
 
 ```text
-PROTO 1
-READY
+STATUS_BEGIN
+PROTO 2
+FW_VERSION 0.6.1-dev
+BT_NAME VoxOneBT-EFF35A
+CAPS A2DP AVRCP ABSVOL I2S_TX DIAG
 DISCONNECTED
 STOPPED
+STATUS_END
 ```
 
-When connected it returns `CONNECTED`, then `DEVICE name` if the peer name is
-known, followed by the current playback state and each non-empty metadata
-field. If known, `SAMPLE_RATE n` and `VOLUME n` are emitted after playback
-state and before metadata, in that order. Metadata lines use `ARTIST text`,
-`TITLE text`, and `ALBUM text`.
+When connected it returns `CONNECTED`, then `DEVICE name` if known, followed
+by the current playback state. If known, `SAMPLE_RATE n` and `VOLUME n` follow
+in that order. Non-empty metadata lines follow as `ARTIST text`, `TITLE text`,
+and `ALBUM text`. Every response starts with `STATUS_BEGIN` and ends with
+`STATUS_END`. The firmware and Bluetooth name lines have the same source and
+format as the startup announcement.
+
+## PING and GET_DIAG
+
+`PING` returns one line, `PONG`, without changing Bluetooth state.
+
+`GET_DIAG` returns current device diagnostics:
+
+```text
+DIAG_BEGIN
+RESET_REASON POWERON
+UPTIME 4321
+HEAP 123456
+MIN_HEAP 120000
+DIAG_END
+```
+
+`UPTIME` is milliseconds since boot. `HEAP` and `MIN_HEAP` are free bytes.
+`RESET_REASON` is one of `POWERON`, `SOFTWARE`, `WATCHDOG`, `PANIC`,
+`EXTERNAL`, `DEEPSLEEP`, `BROWNOUT`, or `UNKNOWN`. The values above are
+examples. Continuous verbose diagnostics
+remain on USB Serial and are not sent on the inter-board UART.
 
 ## Asynchronous Bluetooth events
 
@@ -44,7 +79,8 @@ message is emitted. A reconnect may report the resolved name again.
 
 An empty line is ignored. An unknown command returns `ERR UNKNOWN_COMMAND`. A
 line longer than 64 characters returns `ERR LINE_TOO_LONG`; input is discarded
-through its terminating LF, after which normal parsing resumes.
+through its terminating LF, after which normal parsing resumes. The 64-byte
+limit applies only to incoming commands; outgoing metadata can be longer.
 
 ## AVRCP transport commands
 
@@ -82,7 +118,6 @@ SAMPLE_RATE 44100
 The value is stored exactly as supplied by ESP32-A2DP. Repeated identical
 callbacks are suppressed. Before the first callback and after disconnect,
 `GET_STATUS` omits this line. There is no MAIN-to-BT sample-rate command.
-The message set and protocol version are unchanged by physical I2S output.
 
 ## Errors
 
@@ -92,6 +127,8 @@ The message set and protocol version are unchanged by physical I2S output.
 - `ERR LINE_TOO_LONG`: input exceeds 64 characters
 - `ERR INVALID_VALUE`: missing, malformed, or out-of-range volume
 
-## Reserved, not implemented
+## Future extensions
 
-No additional commands are reserved in this stage.
+This version does not implement `SET_BT_NAME`, custom-name NVS storage,
+`FW_BEGIN`, firmware update, or binary UART mode. Capability tokens may be
+added when those features are implemented.

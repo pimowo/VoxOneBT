@@ -12,32 +12,38 @@ for PSRAM.
 |---|---|---:|
 | UART2 | TX | 17 |
 | UART2 | RX | 16 |
-| I2S0 | BCLK | 4 |
-| I2S0 | WS / LRCLK | 25 |
-| I2S0 | DATA | 27 |
+| I2S0 | BCLK | 18 |
+| I2S0 | WS / LRCLK | 19 |
+| I2S0 | DATA | 23 |
 
 Both sides use 3.3 V logic. Power off the boards while making connections.
 USB Serial is a separate diagnostic channel at 115200 baud. The inter-board
 UART is hardware UART2 at 115200 baud, 8N1.
 
-## SALON connection
+## SALON Encoder_1 I2S connection
 
-| VoxOneBT | Direction | SALON MAIN |
+| VoxOneBT Wemos | Direction | SALON Encoder_1 |
 |---|---:|---|
-| BCLK GPIO4 | -> | GPIO41 |
-| WS GPIO25 | -> | GPIO40 |
-| DATA GPIO27 | -> | GPIO39 |
-| TX GPIO17 | -> | RX GPIO15 |
-| RX GPIO16 | <- | TX GPIO16 |
+| GPIO18 BCLK | -> | GPIO41 / S2 |
+| GPIO19 WS | -> | GPIO40 / S1 |
+| GPIO23 DATA | -> | GPIO39 / KEY |
+| GND | <-> | GND |
+
+## SALON Nextion UART connection
+
+| VoxOneBT Wemos | Direction | SALON Nextion |
+|---|---:|---|
+| GPIO17 TX | -> | GPIO15 RX |
+| GPIO16 RX | <- | GPIO16 TX |
 | GND | <-> | GND |
 
 ## DIN connection
 
 | VoxOneBT | Direction | DIN |
 |---|---:|---|
-| BCLK GPIO4 | -> | GPIO4 |
-| WS GPIO25 | -> | GPIO5 |
-| DATA GPIO27 | -> | GPIO6 |
+| BCLK GPIO18 | -> | GPIO4 |
+| WS GPIO19 | -> | GPIO5 |
+| DATA GPIO23 | -> | GPIO6 |
 | TX GPIO17 | -> | RX GPIO7 |
 | RX GPIO16 | <- | TX GPIO8 |
 | GND | <-> | GND |

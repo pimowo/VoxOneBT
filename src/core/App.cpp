@@ -28,10 +28,10 @@ void App::begin() {
   Logger::info("BOOT");
   uartProtocol_.setAvrcCommandHandler(handleAvrcCommand, this);
   uartProtocol_.setVolumeCommandHandler(handleVolumeCommand, this);
-  uartProtocol_.begin();
-  Logger::info("UART READY");
   i2sOutput_.begin();
   bluetoothService_.begin();
+  uartProtocol_.begin(bluetoothService_.name());
+  Logger::info("UART READY");
   logDiagnostics("boot");
 }
 

@@ -5,9 +5,9 @@ MAIN is the I2S slave receiver.
 
 | Signal | VoxOneBT | Direction |
 |---|---|---:|
-| BCLK | GPIO4 | -> |
-| WS / LRCLK | GPIO25 | -> |
-| DATA | GPIO27 | -> |
+| BCLK | GPIO18 | -> |
+| WS / LRCLK | GPIO19 | -> |
+| DATA | GPIO23 | -> |
 | GND | GND | <-> |
 
 Receiver pins depend on the SALON or DIN installation. See `HARDWARE.md` for
