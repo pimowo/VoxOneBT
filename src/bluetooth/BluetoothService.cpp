@@ -131,6 +131,7 @@ void BluetoothService::begin() {
 
   // Application-owned I2S is the only physical output. The false argument
   // prevents ESP32-A2DP from also writing through its legacy I2S backend.
+  a2dpSink_.set_raw_stream_reader(measureRawAudio);
   a2dpSink_.set_stream_reader(streamAudio, false);
   a2dpSink_.start(deviceName_, false);
 
@@ -260,6 +261,19 @@ void BluetoothService::getDiagnostics(BluetoothDiagnostics& diagnostics) const {
   copyCallbackDiagnostics(diagnostics.stream, diagnostics_.stream);
 }
 
+bool BluetoothService::takeRawVu(uint32_t nowMs, RawVuPeaks& peaks) {
+  portENTER_CRITICAL(&stateMux_);
+  const bool due = rawVu_.takeIfDue(nowMs, peaks);
+  portEXIT_CRITICAL(&stateMux_);
+  return due;
+}
+
+void BluetoothService::clearRawVu() {
+  portENTER_CRITICAL(&stateMux_);
+  rawVu_.clear();
+  portEXIT_CRITICAL(&stateMux_);
+}
+
 void BluetoothService::connectionCallback(esp_a2d_connection_state_t state,
                                           void* context) {
   BluetoothService* service = static_cast<BluetoothService*>(context);
@@ -310,6 +324,14 @@ void BluetoothService::streamAudio(const uint8_t* data, uint32_t length) {
     recordCallback(instance_->diagnostics_.stream, true);
     instance_->audioOutput_.write(data, length);
   }
+}
+
+void BluetoothService::measureRawAudio(const uint8_t* data, uint32_t length) {
+  if (instance_ == nullptr) return;
+  const RawVuPeaks peaks = measureRawVu(data, length);
+  portENTER_CRITICAL(&instance_->stateMux_);
+  instance_->rawVu_.add(peaks);
+  portEXIT_CRITICAL(&instance_->stateMux_);
 }
 
 void BluetoothService::updateConnection(esp_a2d_connection_state_t state) {

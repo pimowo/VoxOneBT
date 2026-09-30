@@ -49,6 +49,7 @@ void App::loop() {
   uartProtocol_.loop();
   processBluetoothChanges();
   processStatusRequests();
+  processVu();
   i2sOutput_.loop();
   const uint32_t now = millis();
   if (now - lastDiagnosticsMs_ >= 30000U) {
@@ -133,12 +134,34 @@ void App::processBluetoothChanges() {
   }
 
   uartProtocol_.sendBluetoothChanges(changes);
+  if (rawVuShouldSendZero(
+          changes.connectionChanged,
+          changes.connection == BtConnectionState::Connected,
+          changes.playbackChanged,
+          changes.playback == BtPlaybackState::Playing)) {
+    bluetoothService_.clearRawVu();
+    uartProtocol_.sendVu(0, 0);
+  }
   if (changes.connectionChanged) {
     logDiagnostics(changes.connection == BtConnectionState::Connected
                        ? "connected" : "disconnected");
   } else if (changes.sampleRateChanged) {
     logDiagnostics("sampleRate");
   }
+}
+
+void App::processVu() {
+  const uint32_t nowMs = millis();
+  if (static_cast<uint32_t>(nowMs - lastVuCheckMs_) < RawVuMeter::IntervalMs)
+    return;
+  lastVuCheckMs_ = nowMs;
+  RawVuPeaks peaks;
+  if (!bluetoothService_.takeRawVu(nowMs, peaks)) return;
+  BluetoothSnapshot snapshot{};
+  bluetoothService_.getSnapshot(snapshot);
+  if (snapshot.connection == BtConnectionState::Connected &&
+      snapshot.playback == BtPlaybackState::Playing)
+    uartProtocol_.sendVu(peaks.left, peaks.right);
 }
 
 void App::processStatusRequests() {

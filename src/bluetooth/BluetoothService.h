@@ -6,6 +6,7 @@
 
 #include "AppConfig.h"
 #include "audio/I2sOutput.h"
+#include "bluetooth/RawVuMeter.h"
 
 constexpr size_t BT_METADATA_MAX_LENGTH = 192;
 constexpr size_t BT_PEER_NAME_MAX_LENGTH = 96;
@@ -83,6 +84,8 @@ class BluetoothService {
   bool takeChanges(BluetoothChanges& changes);
   void getSnapshot(BluetoothSnapshot& snapshot) const;
   void getDiagnostics(BluetoothDiagnostics& diagnostics) const;
+  bool takeRawVu(uint32_t nowMs, RawVuPeaks& peaks);
+  void clearRawVu();
 
  private:
   class PeerNameSink final : public BluetoothA2DPSink {
@@ -132,6 +135,7 @@ class BluetoothService {
   static void sampleRateCallback(uint16_t sampleRate);
   static void peerNameCallback(const char* name);
   static void streamAudio(const uint8_t* data, uint32_t length);
+  static void measureRawAudio(const uint8_t* data, uint32_t length);
 
   void updateConnection(esp_a2d_connection_state_t state);
   void updatePlayback(esp_avrc_playback_stat_t state);
@@ -153,4 +157,5 @@ class BluetoothService {
   uint16_t pendingFlags_ = 0;
   uint8_t unsupportedPlaybackValue_ = 0;
   BluetoothDiagnostics diagnostics_{};
+  RawVuMeter rawVu_{};
 };

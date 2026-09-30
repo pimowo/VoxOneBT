@@ -10,7 +10,7 @@
 
 namespace {
 
-constexpr char CAPABILITIES[] = "A2DP AVRCP ABSVOL I2S_TX DIAG";
+constexpr char CAPABILITIES[] = "A2DP AVRCP ABSVOL I2S_TX DIAG VU_RAW";
 
 const char* resetReasonToken(esp_reset_reason_t reason) {
   switch (reason) {
@@ -153,6 +153,13 @@ void UartProtocol::sendBluetoothChanges(const BluetoothChanges& changes) {
   if (changes.volumeChanged && changes.volumeKnown) {
     sendVolume(changes.volume);
   }
+}
+
+void UartProtocol::sendVu(uint16_t leftPeak, uint16_t rightPeak) {
+  serial_.print("VU ");
+  serial_.print(static_cast<uint32_t>(leftPeak > 32768 ? 32768 : leftPeak));
+  serial_.write(' ');
+  serial_.println(static_cast<uint32_t>(rightPeak > 32768 ? 32768 : rightPeak));
 }
 
 void UartProtocol::consume(char character) {

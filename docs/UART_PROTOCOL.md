@@ -12,7 +12,7 @@ READY
 PROTO 2
 FW_VERSION 0.6.1-dev
 BT_NAME VoxOneBT-EFF35A
-CAPS A2DP AVRCP ABSVOL I2S_TX DIAG
+CAPS A2DP AVRCP ABSVOL I2S_TX DIAG VU_RAW
 ```
 
 `BT_NAME` is the actual name owned by BluetoothService; the suffix shown above
@@ -29,7 +29,7 @@ STATUS_BEGIN
 PROTO 2
 FW_VERSION 0.6.1-dev
 BT_NAME VoxOneBT-EFF35A
-CAPS A2DP AVRCP ABSVOL I2S_TX DIAG
+CAPS A2DP AVRCP ABSVOL I2S_TX DIAG VU_RAW
 DISCONNECTED
 STOPPED
 STATUS_END
@@ -71,8 +71,15 @@ Changed state is sent once as one of `CONNECTED`, `DISCONNECTED`, `PLAYING`,
 The asynchronously resolved peer name is emitted once as `DEVICE name`.
 Repeated identical names are suppressed.
 
-On disconnect, playback becomes stopped and stored metadata is cleared. Only
-`DISCONNECTED` is emitted automatically; the next `GET_STATUS` reports the
+`VU_RAW` adds asynchronous `VU leftPeak rightPeak` lines, with independent
+0–32768 peaks from 16-bit stereo PCM before ESP32-A2DP volume control. During
+playback the module sends at most one update every 50 ms. A transition to
+PAUSED, STOPPED, or DISCONNECTED sends one `VU 0 0`. PCM from this callback
+is used only for metering; the existing post-volume I2S output is unchanged.
+Older protocol-v2 implementations may omit this capability and these lines.
+
+On disconnect, playback becomes stopped and stored metadata is cleared.
+`DISCONNECTED` and one `VU 0 0` are emitted; the next `GET_STATUS` reports the
 clean disconnected snapshot.
 The stored peer name is also cleared, so no empty or placeholder `DEVICE`
 message is emitted. A reconnect may report the resolved name again.

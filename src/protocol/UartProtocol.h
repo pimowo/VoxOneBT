@@ -20,6 +20,7 @@ class UartProtocol {
   bool takeStatusRequest();
   void sendStatus(const BluetoothSnapshot& snapshot);
   void sendBluetoothChanges(const BluetoothChanges& changes);
+  void sendVu(uint16_t leftPeak, uint16_t rightPeak);
 
  private:
   void consume(char character);
