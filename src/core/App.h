@@ -24,4 +24,5 @@ class App {
   UartProtocol uartProtocol_;
   uint32_t lastDiagnosticsMs_ = 0;
   uint32_t lastVuCheckMs_ = 0;
+  bool i2sRateReady_ = false;
 };

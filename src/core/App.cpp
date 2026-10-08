@@ -70,6 +70,7 @@ void App::logDiagnostics(const char* event) {
   logCallbackDiagnostics("metadata", diagnostics.metadata);
   logCallbackDiagnostics("volume", diagnostics.volume);
   logCallbackDiagnostics("playback", diagnostics.playback);
+  logCallbackDiagnostics("audioState", diagnostics.audioState);
   logCallbackDiagnostics("sampleRate", diagnostics.sampleRate);
   logCallbackDiagnostics("stream", diagnostics.stream);
 }
@@ -85,6 +86,7 @@ void App::processBluetoothChanges() {
                      ? "BT connected"
                      : "BT disconnected");
     if (changes.connection == BtConnectionState::Disconnected) {
+      i2sRateReady_ = false;
       i2sOutput_.setActive(false);
     }
   }
@@ -104,11 +106,28 @@ void App::processBluetoothChanges() {
   }
 
   if (changes.sampleRateChanged && changes.sampleRateKnown) {
-    i2sOutput_.setSampleRate(changes.sampleRate);
+    i2sRateReady_ = i2sOutput_.setSampleRate(changes.sampleRate);
+  }
+
+  if (changes.audioStateChanged) {
+    switch (changes.audioGate.state()) {
+      case A2dpAudioState::Started:
+        Logger::info("BT audio: STARTED");
+        break;
+      case A2dpAudioState::Suspended:
+        Logger::info("BT audio: SUSPENDED");
+        break;
+      case A2dpAudioState::Stopped:
+        Logger::info("BT audio: STOPPED");
+        break;
+    }
+  }
+  if (changes.audioStateChanged || changes.sampleRateChanged ||
+      changes.connectionChanged) {
+    i2sOutput_.setActive(i2sRateReady_ && changes.audioGate.desiredActive());
   }
 
   if (changes.playbackChanged) {
-    i2sOutput_.setActive(changes.playback == BtPlaybackState::Playing);
     switch (changes.playback) {
       case BtPlaybackState::Playing:
         Logger::info("BT playback: PLAYING");

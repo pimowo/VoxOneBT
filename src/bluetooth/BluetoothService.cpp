@@ -121,6 +121,7 @@ void BluetoothService::begin() {
 
   a2dpSink_.setPeerNameCallback(peerNameCallback);
   a2dpSink_.set_on_connection_state_changed(connectionCallback, this);
+  a2dpSink_.set_on_audio_state_changed(audioStateCallback, this);
   a2dpSink_.set_avrc_rn_playstatus_callback(playbackCallback);
   a2dpSink_.set_avrc_metadata_attribute_mask(
       ESP_AVRC_MD_ATTR_TITLE | ESP_AVRC_MD_ATTR_ARTIST |
@@ -210,6 +211,7 @@ bool BluetoothService::takeChanges(BluetoothChanges& changes) {
 
   changes.connection = state_.connection;
   changes.playback = state_.playback;
+  changes.audioGate = state_.audioGate;
   changes.volume = state_.volume;
   changes.volumeKnown = state_.volumeKnown;
   changes.sampleRate = state_.sampleRate;
@@ -221,6 +223,7 @@ bool BluetoothService::takeChanges(BluetoothChanges& changes) {
   memcpy(changes.album, state_.album, sizeof(changes.album));
   changes.connectionChanged = (flags & ConnectionPending) != 0;
   changes.playbackChanged = (flags & PlaybackPending) != 0;
+  changes.audioStateChanged = (flags & AudioStatePending) != 0;
   changes.artistChanged = (flags & ArtistPending) != 0;
   changes.titleChanged = (flags & TitlePending) != 0;
   changes.albumChanged = (flags & AlbumPending) != 0;
@@ -239,6 +242,7 @@ void BluetoothService::getSnapshot(BluetoothSnapshot& snapshot) const {
   portENTER_CRITICAL(&stateMux_);
   snapshot.connection = state_.connection;
   snapshot.playback = state_.playback;
+  snapshot.audioGate = state_.audioGate;
   snapshot.volume = state_.volume;
   snapshot.volumeKnown = state_.volumeKnown;
   snapshot.sampleRate = state_.sampleRate;
@@ -257,6 +261,7 @@ void BluetoothService::getDiagnostics(BluetoothDiagnostics& diagnostics) const {
   copyCallbackDiagnostics(diagnostics.metadata, diagnostics_.metadata);
   copyCallbackDiagnostics(diagnostics.volume, diagnostics_.volume);
   copyCallbackDiagnostics(diagnostics.playback, diagnostics_.playback);
+  copyCallbackDiagnostics(diagnostics.audioState, diagnostics_.audioState);
   copyCallbackDiagnostics(diagnostics.sampleRate, diagnostics_.sampleRate);
   copyCallbackDiagnostics(diagnostics.stream, diagnostics_.stream);
 }
@@ -287,6 +292,15 @@ void BluetoothService::playbackCallback(esp_avrc_playback_stat_t state) {
   if (instance_ != nullptr) {
     recordCallback(instance_->diagnostics_.playback);
     instance_->updatePlayback(state);
+  }
+}
+
+void BluetoothService::audioStateCallback(esp_a2d_audio_state_t state,
+                                          void* context) {
+  BluetoothService* service = static_cast<BluetoothService*>(context);
+  if (service != nullptr) {
+    recordCallback(service->diagnostics_.audioState);
+    service->updateAudioState(state);
   }
 }
 
@@ -353,6 +367,8 @@ void BluetoothService::updateConnection(esp_a2d_connection_state_t state) {
 
   if (next == BtConnectionState::Disconnected) {
     clearSessionStateLocked();
+  } else {
+    state_.audioGate.onConnection(true);
   }
   portEXIT_CRITICAL(&stateMux_);
 }
@@ -381,6 +397,31 @@ void BluetoothService::updatePlayback(esp_avrc_playback_stat_t state) {
   if (state_.playback != next) {
     state_.playback = next;
     pendingFlags_ |= PlaybackPending;
+  }
+  portEXIT_CRITICAL(&stateMux_);
+}
+
+void BluetoothService::updateAudioState(esp_a2d_audio_state_t state) {
+  A2dpAudioState next;
+  switch (state) {
+    case ESP_A2D_AUDIO_STATE_STARTED:
+      next = A2dpAudioState::Started;
+      break;
+    case ESP_A2D_AUDIO_STATE_REMOTE_SUSPEND:
+      next = A2dpAudioState::Suspended;
+      break;
+    case ESP_A2D_AUDIO_STATE_STOPPED:
+      next = A2dpAudioState::Stopped;
+      break;
+    default:
+      return;
+  }
+
+  portENTER_CRITICAL(&stateMux_);
+  if (state_.connection == BtConnectionState::Connected &&
+      state_.audioGate.state() != next) {
+    state_.audioGate.onAudioState(next);
+    pendingFlags_ |= AudioStatePending;
   }
   portEXIT_CRITICAL(&stateMux_);
 }
@@ -441,6 +482,7 @@ void BluetoothService::updateSampleRate(uint16_t sampleRate) {
   if (!state_.sampleRateKnown || state_.sampleRate != sampleRate) {
     state_.sampleRate = sampleRate;
     state_.sampleRateKnown = true;
+    state_.audioGate.onSampleRate();
     pendingFlags_ |= SampleRatePending;
   }
   portEXIT_CRITICAL(&stateMux_);
@@ -469,6 +511,7 @@ void BluetoothService::updatePeerName(const char* name) {
 }
 
 void BluetoothService::clearSessionStateLocked() {
+  state_.audioGate.onConnection(false);
   state_.playback = BtPlaybackState::Stopped;
   state_.artist[0] = '\0';
   state_.title[0] = '\0';
@@ -478,6 +521,6 @@ void BluetoothService::clearSessionStateLocked() {
   state_.peerNameKnown = false;
   state_.peerName[0] = '\0';
   pendingFlags_ &= static_cast<uint16_t>(
-      ~(PlaybackPending | ArtistPending | TitlePending | AlbumPending |
+      ~(PlaybackPending | AudioStatePending | ArtistPending | TitlePending | AlbumPending |
         VolumePending | SampleRatePending | PeerNamePending));
 }

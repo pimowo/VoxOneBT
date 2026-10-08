@@ -6,6 +6,7 @@
 
 #include "AppConfig.h"
 #include "audio/I2sOutput.h"
+#include "bluetooth/A2dpAudioGate.h"
 #include "bluetooth/RawVuMeter.h"
 
 constexpr size_t BT_METADATA_MAX_LENGTH = 192;
@@ -32,6 +33,7 @@ enum class AvrcCommand : uint8_t {
 struct BluetoothSnapshot {
   BtConnectionState connection = BtConnectionState::Disconnected;
   BtPlaybackState playback = BtPlaybackState::Stopped;
+  A2dpAudioGate audioGate{};
   uint8_t volume = 0;
   bool volumeKnown = false;
   uint32_t sampleRate = 0;
@@ -46,6 +48,7 @@ struct BluetoothSnapshot {
 struct BluetoothChanges : BluetoothSnapshot {
   bool connectionChanged = false;
   bool playbackChanged = false;
+  bool audioStateChanged = false;
   bool artistChanged = false;
   bool titleChanged = false;
   bool albumChanged = false;
@@ -69,6 +72,7 @@ struct BluetoothDiagnostics {
   CallbackDiagnostics metadata;
   CallbackDiagnostics volume;
   CallbackDiagnostics playback;
+  CallbackDiagnostics audioState;
   CallbackDiagnostics sampleRate;
   CallbackDiagnostics stream;
 };
@@ -125,11 +129,13 @@ class BluetoothService {
     VolumePending = 1U << 6,
     SampleRatePending = 1U << 7,
     PeerNamePending = 1U << 8,
+    AudioStatePending = 1U << 9,
   };
 
   static void connectionCallback(esp_a2d_connection_state_t state,
                                  void* context);
   static void playbackCallback(esp_avrc_playback_stat_t state);
+  static void audioStateCallback(esp_a2d_audio_state_t state, void* context);
   static void metadataCallback(uint8_t attributeId, const uint8_t* text);
   static void volumeCallback(int volume);
   static void sampleRateCallback(uint16_t sampleRate);
@@ -139,6 +145,7 @@ class BluetoothService {
 
   void updateConnection(esp_a2d_connection_state_t state);
   void updatePlayback(esp_avrc_playback_stat_t state);
+  void updateAudioState(esp_a2d_audio_state_t state);
   void updateMetadata(uint8_t attributeId, const uint8_t* text);
   void updateVolume(int volume);
   void updateSampleRate(uint16_t sampleRate);
