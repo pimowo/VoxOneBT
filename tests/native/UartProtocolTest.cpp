@@ -46,6 +46,8 @@ uint32_t millis() { return uptimeMs; }
 esp_reset_reason_t esp_reset_reason() { return resetReason; }
 
 int main() {
+  static_assert(AppConfig::UART_BAUD == 921600, "inter-board UART baud changed");
+  static_assert(AppConfig::USB_SERIAL_BAUD == 115200, "USB debug baud changed");
   const std::string versionLine = std::string("FW_VERSION ") + Version::FIRMWARE + "\n";
   HardwareSerial serial;
   UartProtocol protocol(serial);
