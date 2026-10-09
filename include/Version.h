@@ -2,7 +2,7 @@
 
 #include <stdint.h>
 
-#define VOXONE_FIRMWARE_VERSION "0.6.4-dev"
+#define VOXONE_FIRMWARE_VERSION "0.6.6-dev"
 #define VOXONE_UART_PROTOCOL_VERSION 2
 
 namespace Version {
