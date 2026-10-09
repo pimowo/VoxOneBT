@@ -7,6 +7,7 @@
 #include "Pins.h"
 #include "Version.h"
 #include "diagnostics/Logger.h"
+#include "update/VoxOneImageManifest.h"
 
 namespace {
 
@@ -49,8 +50,8 @@ void UartProtocol::begin(const char* bluetoothName) {
 
 void UartProtocol::sendIdentity() {
   serial_.print("PROTO ");
-  serial_.println(Version::PROTOCOL);
-  sendMetadata("FW_VERSION", Version::FIRMWARE);
+  serial_.println(VoxOneImageManifest::kCurrent.uartProtocolVersion);
+  sendMetadata("FW_VERSION", VoxOneImageManifest::kCurrent.firmwareVersion);
   sendMetadata("BT_NAME", bluetoothName_);
   sendMetadata("CAPS", CAPABILITIES);
 }

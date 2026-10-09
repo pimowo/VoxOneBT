@@ -13,8 +13,14 @@
    PCM ring buffer is present.
 7. Run the native UART protocol test with `g++ -std=c++11 -Wall -Wextra
    -Itests/native/stubs -Iinclude -Isrc tests/native/UartProtocolTest.cpp
-   src/protocol/UartProtocol.cpp -o .pio/build/uart_protocol_native.exe`, then
+   src/protocol/UartProtocol.cpp src/update/VoxOneImageManifest.cpp
+   -o .pio/build/uart_protocol_native.exe`, then
    run `.pio/build/uart_protocol_native.exe`.
+8. Run `g++ -std=c++11 -Wall -Wextra -Iinclude -Isrc
+   tests/native/VoxOneImageManifestTest.cpp
+   src/update/VoxOneImageManifest.cpp -o .pio/build/manifest_native.exe`, then
+   run `.pio/build/manifest_native.exe`.
+9. Run `python3 scripts/verify_image_manifest.py` on the built firmware image.
 
 ## Build and boot
 
