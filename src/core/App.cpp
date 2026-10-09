@@ -225,6 +225,6 @@ void App::processStatusRequests() {
   while (uartProtocol_.takeStatusRequest()) {
     BluetoothSnapshot snapshot{};
     bluetoothService_.getSnapshot(snapshot);
-    uartProtocol_.sendStatus(snapshot);
+    uartProtocol_.sendStatus(snapshot, otaBootHealth_.snapshotStatus());
   }
 }

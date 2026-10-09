@@ -140,7 +140,7 @@ int main() {
     changes.connectionChanged = true;
     r.uart.sendBluetoothChanges(changes);
     r.uart.sendVu(2, 3);
-    r.uart.sendStatus(BluetoothSnapshot{});
+    r.uart.sendStatus(BluetoothSnapshot{}, OtaStatus::Unknown);
     assert(r.take().empty());
     // Binary bytes (including ASCII command text) never reach line parser.
     r.input("PING\n");

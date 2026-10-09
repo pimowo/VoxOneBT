@@ -3,6 +3,7 @@
 #include <stdint.h>
 
 #include "update/OtaBootHealthPolicy.h"
+#include "update/OtaStatus.h"
 
 class OtaBootHealth {
  public:
@@ -15,6 +16,7 @@ class OtaBootHealth {
 
   ImageState imageState() const { return imageState_; }
   OtaBootHealthPolicy::Status status() const { return policy_.status(); }
+  OtaStatus snapshotStatus() const;
 
  private:
   OtaBootHealthPolicy policy_;

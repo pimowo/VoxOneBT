@@ -6,6 +6,7 @@
 #include "AppConfig.h"
 #include "bluetooth/BluetoothService.h"
 #include "update/FirmwareUpdateReceiver.h"
+#include "update/OtaStatus.h"
 
 class UartProtocol {
  public:
@@ -26,7 +27,7 @@ class UartProtocol {
   }
   bool takeStatusRequest();
   void discardStatusRequests() { pendingStatusRequests_ = 0; }
-  void sendStatus(const BluetoothSnapshot& snapshot);
+  void sendStatus(const BluetoothSnapshot& snapshot, OtaStatus otaStatus);
   void sendBluetoothChanges(const BluetoothChanges& changes);
   void sendVu(uint16_t leftPeak, uint16_t rightPeak);
 

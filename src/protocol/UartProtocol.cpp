@@ -102,10 +102,12 @@ bool UartProtocol::takeStatusRequest() {
   return true;
 }
 
-void UartProtocol::sendStatus(const BluetoothSnapshot& snapshot) {
+void UartProtocol::sendStatus(const BluetoothSnapshot& snapshot,
+                              OtaStatus otaStatus) {
   if (firmwareUpdateExclusive()) return;
   sendLine("STATUS_BEGIN");
   sendIdentity();
+  sendMetadata("OTA_STATE", otaStatusToken(otaStatus));
   sendConnection(snapshot.connection);
   if (snapshot.connection == BtConnectionState::Connected &&
       snapshot.peerNameKnown && snapshot.peerName[0] != '\0') {

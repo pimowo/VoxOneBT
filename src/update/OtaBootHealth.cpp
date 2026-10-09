@@ -53,11 +53,35 @@ void OtaBootHealth::loop(uint32_t nowMs) {
   const esp_err_t result = esp_ota_mark_app_valid_cancel_rollback();
   policy_.finishConfirmation(result == ESP_OK);
   if (result == ESP_OK) {
-    Logger::info("OTA image confirmed");
+    if (snapshotStatus() == OtaStatus::Valid)
+      Logger::info("OTA image confirmed VALID");
+    else
+      Logger::error("OTA confirm returned OK but state is not VALID");
   } else {
     char message[48];
     snprintf(message, sizeof(message), "OTA confirm failed: 0x%X",
              static_cast<unsigned int>(result));
     Logger::error(message);
   }
+}
+
+OtaStatus OtaBootHealth::snapshotStatus() const {
+  const esp_partition_t* running = esp_ota_get_running_partition();
+  if (running == nullptr)
+    return otaStatusFor(policy_.status(), OtaPartitionState::ReadFailed);
+
+  esp_ota_img_states_t state{};
+  const esp_err_t result = esp_ota_get_state_partition(running, &state);
+  OtaPartitionState partition = OtaPartitionState::ReadFailed;
+  if (result == ESP_ERR_NOT_SUPPORTED || result == ESP_ERR_NOT_FOUND)
+    partition = OtaPartitionState::NoRecord;
+  else if (result == ESP_OK && state == ESP_OTA_IMG_PENDING_VERIFY)
+    partition = OtaPartitionState::PendingVerify;
+  else if (result == ESP_OK && state == ESP_OTA_IMG_VALID)
+    partition = OtaPartitionState::Valid;
+  else if (result == ESP_OK && state == ESP_OTA_IMG_UNDEFINED)
+    partition = OtaPartitionState::NoRecord;
+  else if (result == ESP_OK)
+    partition = OtaPartitionState::Other;
+  return otaStatusFor(policy_.status(), partition);
 }

@@ -30,6 +30,7 @@ PROTO 2
 FW_VERSION 0.6.2-dev
 BT_NAME VoxOneBT-EFF35A
 CAPS A2DP AVRCP ABSVOL I2S_TX DIAG VU_RAW FW_UPDATE
+OTA_STATE NOT_PENDING
 DISCONNECTED
 STOPPED
 STATUS_END
@@ -41,6 +42,23 @@ in that order. Non-empty metadata lines follow as `ARTIST text`, `TITLE text`,
 and `ALBUM text`. Every response starts with `STATUS_BEGIN` and ends with
 `STATUS_END`. The firmware and Bluetooth name lines have the same source and
 format as the startup announcement.
+
+`OTA_STATE` appears exactly once inside each complete `GET_STATUS` snapshot;
+it is not sent as an asynchronous event. Its values are:
+
+| Value | Meaning |
+|---|---|
+| `NOT_PENDING` | Normal boot with no pending OTA validation. Factory/USB images need not have an `ESP_OTA_IMG_VALID` record. |
+| `PENDING_VERIFY` | The running partition still has `ESP_OTA_IMG_PENDING_VERIFY`, including the application-ready and five-second health wait. |
+| `VALID` | A fresh read of the running partition reports `ESP_OTA_IMG_VALID`. |
+| `CONFIRM_FAILED` | The boot-health attempt to mark the image valid failed. This takes precedence over a raw pending state. |
+| `UNKNOWN` | The running partition or its OTA state could not be read, or the state is unexpected. |
+
+The value comes from `esp_ota_get_running_partition()` and
+`esp_ota_get_state_partition()` when the snapshot is prepared. A successful
+mark-valid call alone does not produce `VALID`; the partition read-back must
+report `ESP_OTA_IMG_VALID`. `PROTO 2` remains unchanged; older MAIN firmware
+ignores an unrecognized line within `STATUS_BEGIN`/`STATUS_END`.
 
 ## PING and GET_DIAG
 
@@ -184,6 +202,22 @@ image happens on the subsequent boot. A valid ABORT returns `FW_ABORTED`,
 aborts the writer, restores the normal UART/BT policy and does not restart.
 No reconnect or AVRCP PLAY is forced after abort/error. Success does not
 re-enable Bluetooth before restart.
+
+`FW_OK` **does not mean** `OTA_STATE VALID`: it means the image was written and
+accepted by `Update.end(false)`. The expected OTA sequence is:
+
+1. Old V0 accepts `FW_BEGIN`, DATA and END, sends `FW_VERIFY` then `FW_OK`, and restarts.
+2. New V0 boots as `PENDING_VERIFY`; `READY` and `FW_VERSION` can already be sent.
+3. A full `GET_STATUS` reports `OTA_STATE PENDING_VERIFY` during startup and the
+   five-second grace period after `App::begin()` marks the application ready.
+4. Boot health calls `esp_ota_mark_app_valid_cancel_rollback()` and reads back
+   the running partition state. A later full `GET_STATUS` reports `OTA_STATE VALID`
+   only after that read-back is `ESP_OTA_IMG_VALID`.
+
+MAIN must wait for that final complete snapshot before declaring OTA success.
+If confirmation fails, `GET_STATUS` reports `OTA_STATE CONFIRM_FAILED`; V0
+keeps running and remains available for USB diagnostics without an automatic
+restart.
 
 ## Future extensions
 

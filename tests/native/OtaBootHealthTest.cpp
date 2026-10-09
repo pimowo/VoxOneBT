@@ -3,8 +3,29 @@
 #include <cstdio>
 
 #include "update/OtaBootHealthPolicy.h"
+#include "update/OtaStatus.h"
 
 int main() {
+  using Health = OtaBootHealthPolicy::Status;
+  using Partition = OtaPartitionState;
+  assert(otaStatusFor(Health::NotPending, Partition::NoRecord) ==
+         OtaStatus::NotPending);
+  assert(otaStatusFor(Health::Pending, Partition::PendingVerify) ==
+         OtaStatus::PendingVerify);
+  assert(otaStatusFor(Health::WaitingHealth, Partition::PendingVerify) ==
+         OtaStatus::PendingVerify);
+  assert(otaStatusFor(Health::Confirmed, Partition::Valid) == OtaStatus::Valid);
+  assert(otaStatusFor(Health::Confirmed, Partition::PendingVerify) ==
+         OtaStatus::PendingVerify);
+  assert(otaStatusFor(Health::Confirmed, Partition::ReadFailed) ==
+         OtaStatus::Unknown);
+  assert(otaStatusFor(Health::ConfirmFailed, Partition::PendingVerify) ==
+         OtaStatus::ConfirmFailed);
+  assert(otaStatusFor(Health::NotPending, Partition::Other) ==
+         OtaStatus::Unknown);
+  assert(otaStatusFor(Health::NotPending, Partition::ReadFailed) ==
+         OtaStatus::Unknown);
+
   OtaBootHealthPolicy normal;
   normal.begin(false);
   normal.markApplicationReady(100);

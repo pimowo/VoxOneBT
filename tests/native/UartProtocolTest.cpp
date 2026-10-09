@@ -63,10 +63,11 @@ int main() {
 
   serial.clearOutput();
   BluetoothSnapshot snapshot;
-  protocol.sendStatus(snapshot);
+  protocol.sendStatus(snapshot, OtaStatus::NotPending);
   expect(serial.output(),
          "STATUS_BEGIN\nPROTO 2\nFW_VERSION 0.6.2-dev\n"
          "BT_NAME VoxOneBT-EFF35A\nCAPS A2DP AVRCP ABSVOL I2S_TX DIAG VU_RAW FW_UPDATE\n"
+         "OTA_STATE NOT_PENDING\n"
          "DISCONNECTED\nSTOPPED\nSTATUS_END\n");
 
   snapshot.connection = BtConnectionState::Connected;
@@ -81,12 +82,16 @@ int main() {
   std::strcpy(snapshot.title, "Title");
   std::strcpy(snapshot.album, "Album");
   serial.clearOutput();
-  protocol.sendStatus(snapshot);
+  protocol.sendStatus(snapshot, OtaStatus::PendingVerify);
   expect(serial.output(),
          "STATUS_BEGIN\nPROTO 2\nFW_VERSION 0.6.2-dev\n"
          "BT_NAME VoxOneBT-EFF35A\nCAPS A2DP AVRCP ABSVOL I2S_TX DIAG VU_RAW FW_UPDATE\n"
+         "OTA_STATE PENDING_VERIFY\n"
          "CONNECTED\nDEVICE Redmi Note 14\nPLAYING\nSAMPLE_RATE 44100\n"
          "VOLUME 51\nARTIST Artist\nTITLE Title\nALBUM Album\nSTATUS_END\n");
+  expect(serial.output().find("OTA_STATE PENDING_VERIFY\n") ==
+             serial.output().rfind("OTA_STATE PENDING_VERIFY\n"),
+         "GET_STATUS must contain exactly one OTA_STATE line");
 
   BluetoothChanges changes;
   changes.connection = BtConnectionState::Connected;
