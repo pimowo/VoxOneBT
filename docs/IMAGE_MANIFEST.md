@@ -30,7 +30,7 @@ by revision; compatibility across revisions is not assumed in v1.
 `include/Version.h` defines the single firmware version and protocol constants.
 The manifest and UART identity use them, and the boot log uses the same version.
 The UART identity reads the manifest at runtime, retaining it in the linked
-firmware image. The current firmware version is `0.6.1-dev`; protocol is 2.
+firmware image. The current firmware version is `0.6.2-dev`; protocol is 2.
 
 An image reader first checks ESP image magic `0xE9`, then scans for the 16-byte
 binary magic. Each candidate must have the complete 60 bytes, supported format

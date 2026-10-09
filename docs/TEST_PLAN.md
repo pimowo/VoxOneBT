@@ -27,7 +27,7 @@
 1. Run `pio run` and confirm a successful build.
 2. Flash the VoxOneBT board only after identifying its correct serial port.
 3. Open its USB Serial monitor at 115200 baud.
-4. Confirm the diagnostic boot output includes version `0.6.1-dev`, `BOOT`,
+4. Confirm the diagnostic boot output includes version `0.6.2-dev`, `BOOT`,
    `UART READY`, `Bluetooth initialized`, and
    `A2DP Sink started as VoxOneBT-XXXXXX`.
    `I2S initialized` must appear only after a valid stream rate is negotiated.
@@ -65,7 +65,7 @@ Send each test as a line ending in LF unless otherwise noted:
 
 Finally, send several commands back-to-back, each terminated with LF, and
 verify one complete response per non-empty command without resets or stalls.
-Check that every `GET_STATUS` contains `PROTO 2`, `FW_VERSION 0.6.1-dev`, the
+Check that every `GET_STATUS` contains `PROTO 2`, `FW_VERSION 0.6.2-dev`, the
 same `BT_NAME` used by A2DP, and the capability line. Check the status fields
 appear between `STATUS_BEGIN` and `STATUS_END` in documented order. Check that
 `GET_DIAG` uses a short reset token and that repeated `PING` requests have no
