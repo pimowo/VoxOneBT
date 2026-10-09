@@ -3,6 +3,7 @@
 #include "audio/I2sOutput.h"
 #include "bluetooth/BluetoothService.h"
 #include "protocol/UartProtocol.h"
+#include "update/OtaBootHealth.h"
 
 class App {
  public:
@@ -22,6 +23,7 @@ class App {
   I2sOutput i2sOutput_;
   BluetoothService bluetoothService_;
   UartProtocol uartProtocol_;
+  OtaBootHealth otaBootHealth_;
   uint32_t lastDiagnosticsMs_ = 0;
   uint32_t lastVuCheckMs_ = 0;
   bool i2sRateReady_ = false;

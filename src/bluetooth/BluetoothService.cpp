@@ -1,6 +1,7 @@
 #include "bluetooth/BluetoothService.h"
 
 #include <esp_mac.h>
+#include <esp_bt_main.h>
 #include <stdio.h>
 #include <string.h>
 
@@ -113,10 +114,10 @@ BluetoothService::BluetoothService(I2sOutput& audioOutput)
   a2dpSink_.set_output(discardOutput_);
 }
 
-void BluetoothService::begin() {
+bool BluetoothService::begin() {
   if (!prepareAutoName()) {
     Logger::error("Bluetooth MAC read failed");
-    return;
+    return false;
   }
 
   a2dpSink_.setPeerNameCallback(peerNameCallback);
@@ -135,9 +136,14 @@ void BluetoothService::begin() {
   a2dpSink_.set_raw_stream_reader(measureRawAudio);
   a2dpSink_.set_stream_reader(streamAudio, false);
   a2dpSink_.start(deviceName_, false);
+  if (esp_bluedroid_get_status() != ESP_BLUEDROID_STATUS_ENABLED) {
+    Logger::error("Bluetooth stack did not start");
+    return false;
+  }
 
   Logger::info("Bluetooth initialized");
   Logger::info("A2DP Sink started as", deviceName_);
+  return true;
 }
 
 bool BluetoothService::prepareAutoName() {

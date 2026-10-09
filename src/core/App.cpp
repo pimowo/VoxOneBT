@@ -24,15 +24,24 @@ void logCallbackDiagnostics(const char* name,
 App::App() : i2sOutput_(), bluetoothService_(i2sOutput_), uartProtocol_(Serial2) {}
 
 void App::begin() {
+  otaBootHealth_.begin();
   Logger::info("VoxOneBT", Version::FIRMWARE);
   Logger::info("BOOT");
   uartProtocol_.setAvrcCommandHandler(handleAvrcCommand, this);
   uartProtocol_.setVolumeCommandHandler(handleVolumeCommand, this);
-  i2sOutput_.begin();
-  bluetoothService_.begin();
+  const bool i2sReady = i2sOutput_.begin();
+  const bool bluetoothStarted = bluetoothService_.begin();
   uartProtocol_.begin(bluetoothService_.name());
-  Logger::info("UART READY");
+  const bool uartReady = static_cast<bool>(Serial2);
+  if (uartReady) {
+    Logger::info("UART READY");
+  } else {
+    Logger::error("UART initialization failed");
+  }
   logDiagnostics("boot");
+  if (i2sReady && bluetoothStarted && uartReady) {
+    otaBootHealth_.markApplicationReady(millis());
+  }
 }
 
 bool App::handleAvrcCommand(AvrcCommand command, void* context) {
@@ -52,6 +61,7 @@ void App::loop() {
   processVu();
   i2sOutput_.loop();
   const uint32_t now = millis();
+  otaBootHealth_.loop(now);
   if (now - lastDiagnosticsMs_ >= 30000U) {
     lastDiagnosticsMs_ = now;
     logDiagnostics("periodic");
