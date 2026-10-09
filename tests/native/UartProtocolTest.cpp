@@ -52,6 +52,8 @@ int main() {
   HardwareSerial serial;
   UartProtocol protocol(serial);
   protocol.begin("VoxOneBT-EFF35A");
+  expect(serial.rxBufferAtBegin() == AppConfig::UART_RX_BUFFER_SIZE,
+         "UART RX buffer must be configured before begin");
   expect(serial.output(),
          std::string("READY\nPROTO 2\n") + versionLine +
          "BT_NAME VoxOneBT-EFF35A\nCAPS A2DP AVRCP ABSVOL I2S_TX DIAG VU_RAW FW_UPDATE\n");

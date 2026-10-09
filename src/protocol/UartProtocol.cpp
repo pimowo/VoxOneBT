@@ -7,11 +7,14 @@
 #include "Pins.h"
 #include "Version.h"
 #include "diagnostics/Logger.h"
+#include "protocol/FirmwareUpdateProtocol.h"
 #include "update/VoxOneImageManifest.h"
 
 namespace {
 
 constexpr char CAPABILITIES[] = "A2DP AVRCP ABSVOL I2S_TX DIAG VU_RAW FW_UPDATE";
+static_assert(AppConfig::UART_RX_BUFFER_SIZE >= FirmwareUpdate::MaxFrameSize,
+              "UART RX buffer must hold a complete firmware DATA frame");
 
 const char* resetReasonToken(esp_reset_reason_t reason) {
   switch (reason) {
@@ -42,6 +45,11 @@ UartProtocol::UartProtocol(HardwareSerial& serial) : serial_(serial) {}
 
 void UartProtocol::begin(const char* bluetoothName) {
   bluetoothName_ = bluetoothName;
+  if (serial_.setRxBufferSize(AppConfig::UART_RX_BUFFER_SIZE) !=
+      AppConfig::UART_RX_BUFFER_SIZE) {
+    Logger::error("UART RX buffer setup failed");
+    return;
+  }
   serial_.begin(AppConfig::UART_BAUD, SERIAL_8N1, Pins::UART_RX,
                 Pins::UART_TX);
   sendLine("READY");

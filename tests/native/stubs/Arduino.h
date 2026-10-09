@@ -8,7 +8,16 @@
 
 class HardwareSerial {
  public:
-  void begin(uint32_t, int, int, int) {}
+  size_t setRxBufferSize(size_t size) {
+    if (begun_) return 0;
+    rxBufferSize_ = size;
+    return rxBufferSize_;
+  }
+  void begin(uint32_t, int, int, int) {
+    begun_ = true;
+    rxBufferAtBegin_ = rxBufferSize_;
+  }
+  size_t rxBufferAtBegin() const { return rxBufferAtBegin_; }
   int available() const { return static_cast<int>(input_.size() - readOffset_); }
   int read() { return static_cast<unsigned char>(input_[readOffset_++]); }
   void feed(const std::string& input) { input_ += input; }
@@ -24,6 +33,9 @@ class HardwareSerial {
   void flush(bool = false) {}
 
  private:
+  size_t rxBufferSize_ = 256;
+  size_t rxBufferAtBegin_ = 0;
+  bool begun_ = false;
   std::string input_;
   size_t readOffset_ = 0;
   std::string output_;
