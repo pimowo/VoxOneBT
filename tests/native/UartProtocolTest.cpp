@@ -6,6 +6,7 @@
 #include <iostream>
 #include <string>
 
+#include "Version.h"
 #include "protocol/UartProtocol.h"
 
 FakeESP ESP;
@@ -45,11 +46,12 @@ uint32_t millis() { return uptimeMs; }
 esp_reset_reason_t esp_reset_reason() { return resetReason; }
 
 int main() {
+  const std::string versionLine = std::string("FW_VERSION ") + Version::FIRMWARE + "\n";
   HardwareSerial serial;
   UartProtocol protocol(serial);
   protocol.begin("VoxOneBT-EFF35A");
   expect(serial.output(),
-         "READY\nPROTO 2\nFW_VERSION 0.6.2-dev\n"
+         std::string("READY\nPROTO 2\n") + versionLine +
          "BT_NAME VoxOneBT-EFF35A\nCAPS A2DP AVRCP ABSVOL I2S_TX DIAG VU_RAW FW_UPDATE\n");
 
   serial.clearOutput();
@@ -65,7 +67,7 @@ int main() {
   BluetoothSnapshot snapshot;
   protocol.sendStatus(snapshot, OtaStatus::NotPending);
   expect(serial.output(),
-         "STATUS_BEGIN\nPROTO 2\nFW_VERSION 0.6.2-dev\n"
+         std::string("STATUS_BEGIN\nPROTO 2\n") + versionLine +
          "BT_NAME VoxOneBT-EFF35A\nCAPS A2DP AVRCP ABSVOL I2S_TX DIAG VU_RAW FW_UPDATE\n"
          "OTA_STATE NOT_PENDING\n"
          "DISCONNECTED\nSTOPPED\nSTATUS_END\n");
@@ -84,7 +86,7 @@ int main() {
   serial.clearOutput();
   protocol.sendStatus(snapshot, OtaStatus::PendingVerify);
   expect(serial.output(),
-         "STATUS_BEGIN\nPROTO 2\nFW_VERSION 0.6.2-dev\n"
+         std::string("STATUS_BEGIN\nPROTO 2\n") + versionLine +
          "BT_NAME VoxOneBT-EFF35A\nCAPS A2DP AVRCP ABSVOL I2S_TX DIAG VU_RAW FW_UPDATE\n"
          "OTA_STATE PENDING_VERIFY\n"
          "CONNECTED\nDEVICE Redmi Note 14\nPLAYING\nSAMPLE_RATE 44100\n"
