@@ -5,6 +5,7 @@
 
 #include "AppConfig.h"
 #include "bluetooth/BluetoothService.h"
+#include "update/FirmwareUpdateReceiver.h"
 
 class UartProtocol {
  public:
@@ -17,7 +18,14 @@ class UartProtocol {
   void loop();
   void setAvrcCommandHandler(AvrcCommandHandler handler, void* context);
   void setVolumeCommandHandler(VolumeCommandHandler handler, void* context);
+  void setFirmwareUpdateChannel(FirmwareUpdateChannel* channel) { firmwareUpdate_ = channel; }
+  void sendFirmwareLine(const char* line);
+  void flushFirmwareTx();
+  bool firmwareUpdateExclusive() const {
+    return firmwareUpdate_ != nullptr && firmwareUpdate_->exclusive();
+  }
   bool takeStatusRequest();
+  void discardStatusRequests() { pendingStatusRequests_ = 0; }
   void sendStatus(const BluetoothSnapshot& snapshot);
   void sendBluetoothChanges(const BluetoothChanges& changes);
   void sendVu(uint16_t leftPeak, uint16_t rightPeak);
@@ -48,4 +56,5 @@ class UartProtocol {
   VolumeCommandHandler volumeCommandHandler_ = nullptr;
   void* avrcCommandContext_ = nullptr;
   void* volumeCommandContext_ = nullptr;
+  FirmwareUpdateChannel* firmwareUpdate_ = nullptr;
 };

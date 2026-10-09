@@ -10,7 +10,7 @@
 
 namespace {
 
-constexpr char CAPABILITIES[] = "A2DP AVRCP ABSVOL I2S_TX DIAG VU_RAW";
+constexpr char CAPABILITIES[] = "A2DP AVRCP ABSVOL I2S_TX DIAG VU_RAW FW_UPDATE";
 
 const char* resetReasonToken(esp_reset_reason_t reason) {
   switch (reason) {
@@ -57,9 +57,27 @@ void UartProtocol::sendIdentity() {
 
 void UartProtocol::loop() {
   while (serial_.available() > 0) {
-    consume(static_cast<char>(serial_.read()));
+    const uint8_t byte = static_cast<uint8_t>(serial_.read());
+    const bool wasExclusive = firmwareUpdateExclusive();
+    if (wasExclusive) {
+      // After FW_OK no more input is interpreted before the reboot.
+      if (firmwareUpdate_ != nullptr) firmwareUpdate_->feedByte(byte, millis());
+    } else {
+      consume(static_cast<char>(byte));
+    }
+    if (wasExclusive && !firmwareUpdateExclusive()) {
+      // A terminal binary frame may have trailing bytes already buffered.
+      // Do not reinterpret those bytes as ordinary text commands.
+      while (serial_.available() > 0) serial_.read();
+      break;
+    }
   }
+  if (firmwareUpdate_ != nullptr) firmwareUpdate_->tick(millis());
 }
+
+void UartProtocol::sendFirmwareLine(const char* line) { sendLine(line); }
+
+void UartProtocol::flushFirmwareTx() { serial_.flush(true); }
 
 void UartProtocol::setAvrcCommandHandler(AvrcCommandHandler handler,
                                          void* context) {
@@ -74,6 +92,7 @@ void UartProtocol::setVolumeCommandHandler(VolumeCommandHandler handler,
 }
 
 bool UartProtocol::takeStatusRequest() {
+  if (firmwareUpdateExclusive()) return false;
   if (pendingStatusRequests_ == 0) {
     return false;
   }
@@ -83,6 +102,7 @@ bool UartProtocol::takeStatusRequest() {
 }
 
 void UartProtocol::sendStatus(const BluetoothSnapshot& snapshot) {
+  if (firmwareUpdateExclusive()) return;
   sendLine("STATUS_BEGIN");
   sendIdentity();
   sendConnection(snapshot.connection);
@@ -128,6 +148,7 @@ void UartProtocol::sendDiagnostics() {
 }
 
 void UartProtocol::sendBluetoothChanges(const BluetoothChanges& changes) {
+  if (firmwareUpdateExclusive()) return;
   if (changes.connectionChanged) {
     sendConnection(changes.connection);
   }
@@ -156,6 +177,7 @@ void UartProtocol::sendBluetoothChanges(const BluetoothChanges& changes) {
 }
 
 void UartProtocol::sendVu(uint16_t leftPeak, uint16_t rightPeak) {
+  if (firmwareUpdateExclusive()) return;
   serial_.print("VU ");
   serial_.print(static_cast<uint32_t>(leftPeak > 32768 ? 32768 : leftPeak));
   serial_.write(' ');
@@ -198,6 +220,14 @@ void UartProtocol::consume(char character) {
 }
 
 void UartProtocol::handleLine() {
+  if (strncmp(lineBuffer_, "FW_BEGIN", 8) == 0 &&
+      (lineBuffer_[8] == '\0' || lineBuffer_[8] == ' ')) {
+    if (firmwareUpdate_ != nullptr)
+      firmwareUpdate_->beginCommand(lineBuffer_, millis());
+    else
+      sendLine("FW_ERR UNAVAILABLE");
+    return;
+  }
   if (strcmp(lineBuffer_, "PING") == 0) {
     sendLine("PONG");
     return;

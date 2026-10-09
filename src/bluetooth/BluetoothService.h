@@ -90,6 +90,8 @@ class BluetoothService {
   void getDiagnostics(BluetoothDiagnostics& diagnostics) const;
   bool takeRawVu(uint32_t nowMs, RawVuPeaks& peaks);
   void clearRawVu();
+  bool enterFirmwareUpdate();
+  void leaveFirmwareUpdate();
 
  private:
   class PeerNameSink final : public BluetoothA2DPSink {
@@ -165,4 +167,5 @@ class BluetoothService {
   uint8_t unsupportedPlaybackValue_ = 0;
   BluetoothDiagnostics diagnostics_{};
   RawVuMeter rawVu_{};
+  bool firmwareUpdateMode_ = false;
 };

@@ -21,7 +21,9 @@ void logCallbackDiagnostics(const char* name,
 
 }  // namespace
 
-App::App() : i2sOutput_(), bluetoothService_(i2sOutput_), uartProtocol_(Serial2) {}
+App::App()
+    : i2sOutput_(), bluetoothService_(i2sOutput_), uartProtocol_(Serial2),
+      otaWriter_(otaBackend_), updateReceiver_(otaWriter_, *this) {}
 
 void App::begin() {
   otaBootHealth_.begin();
@@ -29,6 +31,7 @@ void App::begin() {
   Logger::info("BOOT");
   uartProtocol_.setAvrcCommandHandler(handleAvrcCommand, this);
   uartProtocol_.setVolumeCommandHandler(handleVolumeCommand, this);
+  uartProtocol_.setFirmwareUpdateChannel(&updateReceiver_);
   const bool i2sReady = i2sOutput_.begin();
   const bool bluetoothStarted = bluetoothService_.begin();
   uartProtocol_.begin(bluetoothService_.name());
@@ -56,6 +59,10 @@ bool App::handleVolumeCommand(uint8_t volume, void* context) {
 
 void App::loop() {
   uartProtocol_.loop();
+  if (updateReceiver_.restartDue(millis())) {
+    ESP.restart();
+    return;
+  }
   processBluetoothChanges();
   processStatusRequests();
   processVu();
@@ -67,6 +74,24 @@ void App::loop() {
     logDiagnostics("periodic");
   }
 }
+
+bool App::quiesce() {
+  uartProtocol_.discardStatusRequests();
+  i2sRateReady_ = false;
+  i2sOutput_.setActive(false);
+  bluetoothService_.clearRawVu();
+  return bluetoothService_.enterFirmwareUpdate();
+}
+
+void App::restore() {
+  i2sRateReady_ = false;
+  i2sOutput_.setActive(false);
+  bluetoothService_.leaveFirmwareUpdate();
+}
+
+void App::reply(const char* line) { uartProtocol_.sendFirmwareLine(line); }
+
+void App::flushTx() { uartProtocol_.flushFirmwareTx(); }
 
 void App::logDiagnostics(const char* event) {
   Serial.printf("[DIAG] %s heap=%lu minHeap=%lu appStackHwm=%lu B\n",
@@ -115,7 +140,8 @@ void App::processBluetoothChanges() {
     Logger::info("BT device:", changes.peerName);
   }
 
-  if (changes.sampleRateChanged && changes.sampleRateKnown) {
+  if (!uartProtocol_.firmwareUpdateExclusive() &&
+      changes.sampleRateChanged && changes.sampleRateKnown) {
     i2sRateReady_ = i2sOutput_.setSampleRate(changes.sampleRate);
   }
 
@@ -132,8 +158,9 @@ void App::processBluetoothChanges() {
         break;
     }
   }
-  if (changes.audioStateChanged || changes.sampleRateChanged ||
-      changes.connectionChanged) {
+  if (!uartProtocol_.firmwareUpdateExclusive() &&
+      (changes.audioStateChanged || changes.sampleRateChanged ||
+       changes.connectionChanged)) {
     i2sOutput_.setActive(i2sRateReady_ && changes.audioGate.desiredActive());
   }
 
@@ -180,6 +207,7 @@ void App::processBluetoothChanges() {
 }
 
 void App::processVu() {
+  if (uartProtocol_.firmwareUpdateExclusive()) return;
   const uint32_t nowMs = millis();
   if (static_cast<uint32_t>(nowMs - lastVuCheckMs_) < RawVuMeter::IntervalMs)
     return;

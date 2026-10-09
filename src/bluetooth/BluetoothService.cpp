@@ -2,6 +2,7 @@
 
 #include <esp_mac.h>
 #include <esp_bt_main.h>
+#include <esp_gap_bt_api.h>
 #include <stdio.h>
 #include <string.h>
 
@@ -285,6 +286,27 @@ void BluetoothService::clearRawVu() {
   portEXIT_CRITICAL(&stateMux_);
 }
 
+bool BluetoothService::enterFirmwareUpdate() {
+  __atomic_store_n(&firmwareUpdateMode_, true, __ATOMIC_RELEASE);
+  clearRawVu();
+  if (esp_bt_gap_set_scan_mode(ESP_BT_NON_CONNECTABLE,
+                               ESP_BT_NON_DISCOVERABLE) != ESP_OK) {
+    __atomic_store_n(&firmwareUpdateMode_, false, __ATOMIC_RELEASE);
+    return false;
+  }
+  BluetoothSnapshot snapshot{};
+  getSnapshot(snapshot);
+  if (snapshot.connection == BtConnectionState::Connected) a2dpSink_.disconnect();
+  return true;
+}
+
+void BluetoothService::leaveFirmwareUpdate() {
+  // A failed update never resumes old audio; the next connection establishes
+  // fresh sample-rate and audio-gate state.
+  __atomic_store_n(&firmwareUpdateMode_, false, __ATOMIC_RELEASE);
+  esp_bt_gap_set_scan_mode(ESP_BT_CONNECTABLE, ESP_BT_GENERAL_DISCOVERABLE);
+}
+
 void BluetoothService::connectionCallback(esp_a2d_connection_state_t state,
                                           void* context) {
   BluetoothService* service = static_cast<BluetoothService*>(context);
@@ -342,12 +364,14 @@ void BluetoothService::peerNameCallback(const char* name) {
 void BluetoothService::streamAudio(const uint8_t* data, uint32_t length) {
   if (instance_ != nullptr) {
     recordCallback(instance_->diagnostics_.stream, true);
+    if (__atomic_load_n(&instance_->firmwareUpdateMode_, __ATOMIC_ACQUIRE)) return;
     instance_->audioOutput_.write(data, length);
   }
 }
 
 void BluetoothService::measureRawAudio(const uint8_t* data, uint32_t length) {
   if (instance_ == nullptr) return;
+  if (__atomic_load_n(&instance_->firmwareUpdateMode_, __ATOMIC_ACQUIRE)) return;
   const RawVuPeaks peaks = measureRawVu(data, length);
   portENTER_CRITICAL(&instance_->stateMux_);
   instance_->rawVu_.add(peaks);
@@ -358,6 +382,13 @@ void BluetoothService::updateConnection(esp_a2d_connection_state_t state) {
   if (state != ESP_A2D_CONNECTION_STATE_CONNECTED &&
       state != ESP_A2D_CONNECTION_STATE_DISCONNECTED) {
     return;
+  }
+
+  // ESP32-A2DP turns connectability back on during its disconnect handler.
+  // Its application callback runs afterwards, so enforce update mode here.
+  if (__atomic_load_n(&firmwareUpdateMode_, __ATOMIC_ACQUIRE)) {
+    esp_bt_gap_set_scan_mode(ESP_BT_NON_CONNECTABLE, ESP_BT_NON_DISCOVERABLE);
+    if (state == ESP_A2D_CONNECTION_STATE_CONNECTED) a2dpSink_.disconnect();
   }
 
   const BtConnectionState next =

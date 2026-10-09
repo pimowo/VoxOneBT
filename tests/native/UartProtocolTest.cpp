@@ -50,7 +50,7 @@ int main() {
   protocol.begin("VoxOneBT-EFF35A");
   expect(serial.output(),
          "READY\nPROTO 2\nFW_VERSION 0.6.1-dev\n"
-         "BT_NAME VoxOneBT-EFF35A\nCAPS A2DP AVRCP ABSVOL I2S_TX DIAG VU_RAW\n");
+         "BT_NAME VoxOneBT-EFF35A\nCAPS A2DP AVRCP ABSVOL I2S_TX DIAG VU_RAW FW_UPDATE\n");
 
   serial.clearOutput();
   serial.feed("PING\nGET_STATUS\r\nGET_DIAG\n");
@@ -66,7 +66,7 @@ int main() {
   protocol.sendStatus(snapshot);
   expect(serial.output(),
          "STATUS_BEGIN\nPROTO 2\nFW_VERSION 0.6.1-dev\n"
-         "BT_NAME VoxOneBT-EFF35A\nCAPS A2DP AVRCP ABSVOL I2S_TX DIAG VU_RAW\n"
+         "BT_NAME VoxOneBT-EFF35A\nCAPS A2DP AVRCP ABSVOL I2S_TX DIAG VU_RAW FW_UPDATE\n"
          "DISCONNECTED\nSTOPPED\nSTATUS_END\n");
 
   snapshot.connection = BtConnectionState::Connected;
@@ -84,7 +84,7 @@ int main() {
   protocol.sendStatus(snapshot);
   expect(serial.output(),
          "STATUS_BEGIN\nPROTO 2\nFW_VERSION 0.6.1-dev\n"
-         "BT_NAME VoxOneBT-EFF35A\nCAPS A2DP AVRCP ABSVOL I2S_TX DIAG VU_RAW\n"
+         "BT_NAME VoxOneBT-EFF35A\nCAPS A2DP AVRCP ABSVOL I2S_TX DIAG VU_RAW FW_UPDATE\n"
          "CONNECTED\nDEVICE Redmi Note 14\nPLAYING\nSAMPLE_RATE 44100\n"
          "VOLUME 51\nARTIST Artist\nTITLE Title\nALBUM Album\nSTATUS_END\n");
 

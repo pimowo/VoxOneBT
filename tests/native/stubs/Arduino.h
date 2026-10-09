@@ -21,6 +21,7 @@ class HardwareSerial {
   void println(const char* text) { print(text); write('\n'); }
   void println(uint32_t value) { print(value); write('\n'); }
   size_t write(char value) { output_ += value; return 1; }
+  void flush(bool = false) {}
 
  private:
   std::string input_;

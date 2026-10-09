@@ -12,7 +12,7 @@ READY
 PROTO 2
 FW_VERSION 0.6.1-dev
 BT_NAME VoxOneBT-EFF35A
-CAPS A2DP AVRCP ABSVOL I2S_TX DIAG VU_RAW
+CAPS A2DP AVRCP ABSVOL I2S_TX DIAG VU_RAW FW_UPDATE
 ```
 
 `BT_NAME` is the actual name owned by BluetoothService; the suffix shown above
@@ -29,7 +29,7 @@ STATUS_BEGIN
 PROTO 2
 FW_VERSION 0.6.1-dev
 BT_NAME VoxOneBT-EFF35A
-CAPS A2DP AVRCP ABSVOL I2S_TX DIAG VU_RAW
+CAPS A2DP AVRCP ABSVOL I2S_TX DIAG VU_RAW FW_UPDATE
 DISCONNECTED
 STOPPED
 STATUS_END
@@ -134,8 +134,58 @@ callbacks are suppressed. Before the first callback and after disconnect,
 - `ERR LINE_TOO_LONG`: input exceeds 64 characters
 - `ERR INVALID_VALUE`: missing, malformed, or out-of-range volume
 
+## UART firmware update (`FW_UPDATE`)
+
+Only VoxOneBT firmware is updated. Protocol version remains `PROTO 2` and
+transport remains 115200 8N1. MAIN starts with one LF-terminated ASCII line:
+
+```text
+FW_BEGIN <size-decimal> <crc32-8-hex-digits> <version>
+```
+
+`size` is the exact image length, from 1 through the inactive OTA slot size.
+The CRC is CRC-32/ISO-HDLC of the complete firmware image. `version` is 1–24
+ASCII letters, digits, `.`, `_`, or `-`. The complete input line must fit the
+64-byte UART command limit. Missing/extra fields, zero/overflow/oversize size,
+bad CRC, and invalid version are rejected as `FW_ERR <reason>`. Lack of an
+inactive OTA slot gives `FW_ERR NO_OTA_SLOT`; failure to prepare Bluetooth or
+start the OTA writer gives `FW_ERR BT_QUIESCE` or `FW_ERR OTA_BEGIN`.
+
+After successful preparation VoxOneBT sends `FW_READY 1024`. From that point,
+MAIN sends **binary frames only**; ASCII commands are not parsed until abort,
+error, or timeout. The UART is exclusive to update replies: asynchronous BT
+events, VU, and status are suppressed. USB Serial diagnostics remain available.
+The A2DP peer is disconnected, Bluetooth is made non-connectable and
+non-discoverable, application PCM/I2S is stopped, and VU state is cleared.
+
+Each frame is `B7 4F | type:u8 | sequence:u32 LE | length:u16 LE |
+payload:length bytes | crc32:u32 LE`. The frame CRC-32/ISO-HDLC covers `type`
+through the final payload byte, excluding magic and CRC trailer. Type 1 is
+DATA (1–1024 payload bytes), type 2 is END (zero payload), and type 3 is ABORT
+(zero payload). Sequences start at zero and advance once per accepted DATA.
+END/ABORT carry the next expected sequence.
+
+For a newly accepted DATA, `FW_ACK <sequence> <confirmedBytes>` is sent only
+after the entire payload has been accepted by `Update.write()`. An identical
+retry of the latest DATA receives the same ACK without another flash write.
+CRC or sequence errors are retryable as `FW_NACK <sequence> FRAME_CRC` or
+`FW_NACK <sequence> WRONG_SEQUENCE`; an incomplete END is retryable as
+`FW_NACK <sequence> INCOMPLETE_IMAGE`. A changed duplicate, image CRC mismatch,
+size overflow, invalid session, flash write/finalization failure, or timeout
+is fatal: `FW_ERR <reason>` aborts the OTA writer and returns to text mode.
+Inactivity for more than 15 seconds after the last valid DATA/END aborts the
+session with `FW_ERR TIMEOUT`.
+
+For a valid END, the session verifies exact image length and whole-image CRC;
+VoxOneBT sends `FW_VERIFY`, then performs `Update.end(false)`. `FW_OK` is sent
+only if finalization succeeds. UART TX is flushed (TX only), then VoxOneBT
+restarts after a 100 ms grace period. OTA boot-health validation of the new
+image happens on the subsequent boot. A valid ABORT returns `FW_ABORTED`,
+aborts the writer, restores the normal UART/BT policy and does not restart.
+No reconnect or AVRCP PLAY is forced after abort/error. Success does not
+re-enable Bluetooth before restart.
+
 ## Future extensions
 
-This version does not implement `SET_BT_NAME`, custom-name NVS storage,
-`FW_BEGIN`, firmware update, or binary UART mode. Capability tokens may be
-added when those features are implemented.
+This version does not implement `SET_BT_NAME` or custom-name NVS storage.
+Capability tokens may be added when further features are implemented.
